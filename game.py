@@ -18,6 +18,14 @@ bike_original = pygame.image.load("bike.png").convert_alpha()
 background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 bike_original = pygame.transform.scale(bike_original, (200, 200))
 
+# Load obstacle sprites
+obstacle_images = [
+    pygame.image.load("car_obstacle.png").convert_alpha(),
+    pygame.image.load("car2_obstacle.png").convert_alpha(),
+    pygame.image.load("random_obstacle.png").convert_alpha(),
+    pygame.image.load("barrel_obstacle.png").convert_alpha()
+]
+
 # Lane + player setup
 lanes = [0, 1, 2]
 player_lane = 1
@@ -33,7 +41,7 @@ base_trail_color = (255, 0, 150)
 smoke_particles = []
 
 # Obstacles
-obstacles = []  # each = {"lane": int, "z": float, "scored": bool}
+obstacles = []  # each = {"lane": int, "z": float, "scored": bool, "image": surface}
 spawn_timer = 0
 spawn_interval = 75
 score = 0
@@ -43,8 +51,6 @@ game_over = False
 # Road perspective constants
 road_y_bottom = HEIGHT - 150
 road_y_top = 300
-base_obstacle_size = 160
-max_obstacle_size = 260
 obstacle_speed = 0.1
 center_x = WIDTH // 2
 max_lane_offset = 180
@@ -62,16 +68,21 @@ def lane_blocked_in_future(lane, z_distance=3):
 
 
 def safe_to_spawn():
-    """Ensure not all 3 lanes will be blocked close together"""
-    # Look at upcoming road section
+    """Ensure not all 3 lanes will be blocked close together and avoid wall overlaps"""
+    # Look at upcoming section where obstacles might overlap
+    too_close = any(o["z"] > 6 and o["z"] < 9 for o in obstacles)
+    if too_close:
+        return False  # too close to another wave
+    
     lanes_blocked = {o["lane"] for o in obstacles if 2 < o["z"] < 6}
-    return len(lanes_blocked) < 3  # at least one open lane ahead
+    return len(lanes_blocked) < 3
+
 
 
 def spawn_obstacles():
-    """Spawn 1–2 obstacles in free lanes, never creating an impossible wall"""
+    """Spawn 1–2 obstacles in free lanes with random sprite"""
     if not safe_to_spawn():
-        return  # skip if next section already fully blocked
+        return
 
     available_lanes = [0, 1, 2]
     active_lanes = {o["lane"] for o in obstacles if o["z"] > 6}
@@ -80,12 +91,13 @@ def spawn_obstacles():
     if not free_lanes:
         return
 
-    num_to_spawn = min(len(free_lanes), random.choice([1, 1, 2]))  # mostly 1, sometimes 2
+    num_to_spawn = min(len(free_lanes), random.choice([1, 1, 2]))
     chosen_lanes = random.sample(free_lanes, num_to_spawn)
 
     for lane in chosen_lanes:
-        z_start = random.uniform(10, 16)
-        obstacles.append({"lane": lane, "z": z_start, "scored": False})
+        z_start = random.uniform(6, 11)
+        img = random.choice(obstacle_images)
+        obstacles.append({"lane": lane, "z": z_start, "scored": False, "image": img})
 
 
 def reset_game():
@@ -169,7 +181,6 @@ while True:
             spawn_obstacles()
             spawn_timer = random.randint(60, 90)
 
-        # Move + score + collision
         new_obstacles = []
         for obs in obstacles:
             obs["z"] -= obstacle_speed
@@ -186,7 +197,6 @@ while True:
 
             if obs["z"] > 1:
                 new_obstacles.append(obs)
-
         obstacles = new_obstacles
 
         # --- Draw everything ---
@@ -209,22 +219,19 @@ while True:
         for obs in sorted(obstacles, key=lambda o: o["z"], reverse=True):
             lane = obs["lane"]
             z = obs["z"]
+            img = obs["image"]
 
             scale = 1.8 / z + 0.25
-            obs_size = int(base_obstacle_size * scale)
-            obs_size = max(20, min(obs_size, max_obstacle_size))
-            obs_y = road_y_bottom - (z / 16) * (road_y_bottom - road_y_top)
+            size = int(160 * scale)
+            size = max(20, min(size, 260))
+            img_scaled = pygame.transform.smoothscale(img, (size, size))
 
+            obs_y = road_y_bottom - (z / 16) * (road_y_bottom - road_y_top)
             spread_factor = min_lane_offset + (max_lane_offset - min_lane_offset) * (1 - z / 16)
             lane_offsets = [-spread_factor, 0, spread_factor]
-            obs_x = int(center_x + lane_offsets[lane] - obs_size / 2)
+            obs_x = int(center_x + lane_offsets[lane] - size / 2)
 
-            tilt_angle = (lane - 1) * -5
-            rect_surf = pygame.Surface((obs_size, obs_size), pygame.SRCALPHA)
-            color = (255, 100 + int(155 * (1 - z / 16)), 100)
-            pygame.draw.rect(rect_surf, color, (0, 0, obs_size, obs_size), border_radius=20)
-            rect_surf = pygame.transform.rotate(rect_surf, tilt_angle)
-            screen.blit(rect_surf, (obs_x, obs_y))
+            screen.blit(img_scaled, (obs_x, obs_y))
 
         # Player
         screen.blit(bike, bike_rect.topleft)
