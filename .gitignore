@@ -1,0 +1,36 @@
+# macOS system files
+.DS_Store
+
+# Python cache / build files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment folders
+venv/
+env/
+.venv/
+
+# IDE / editor stuff
+.vscode/
+.idea/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Byte-compiled / packaging
+build/
+dist/
+*.egg-info/
+
+# Pygame / AI project outputs
+*.dat
+*.json
+*.cfg
+*.weights
+
+# OS-specific
+Thumbs.db
